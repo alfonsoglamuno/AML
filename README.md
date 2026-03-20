@@ -48,16 +48,18 @@ Key engineered features:
 | Calibration | Isotonic regression (fit on val, applied to test) |
 | Temporal split | 60 / 20 / 20 (strict chronological, no leakage) |
 
-### Results (test set)
+### Results (test set, 3 days: Sep 14–16 2022, 6,932 fraud cases)
 
 | Metric | Value | Notes |
 |--------|-------|-------|
-| PR-AUC | **0.1504** | Primary metric — ROC-AUC is misleading at 0.1% imbalance |
-| ROC-AUC | **0.9716** | Reported for completeness |
-| Precision @ 100 alerts | ~82% | High-confidence top alerts |
-| Recall @ 1,000 alerts | ~7.8% | |
-| Recall @ 5,000 alerts | ~18.9% | |
-| Payment Format ablation | ~-40% PR-AUC | Single most impactful feature |
+| PR-AUC | **0.1486** | Primary metric — ROC-AUC is misleading at 0.1% imbalance |
+| ROC-AUC | **0.9705** | Reported for completeness |
+| Val PR-AUC | 0.2655 | Val–Test gap = 0.117 |
+| Precision @ 100 alerts | **78%** | High-confidence top alerts |
+| Precision @ 500 alerts | **62%** | |
+| Recall @ 1,000 alerts | **8.0%** | |
+| Recall @ 5,000 alerts | **18.4%** | |
+| Payment Format ablation | **-43.7% PR-AUC** | Single most impactful feature |
 
 ### Key findings
 
@@ -68,19 +70,18 @@ ACH (Automated Clearing House) has a fraud rate of ~6.28% vs the dataset average
 Contrary to expectation, `self_loop` and `same_bank` rank above `Payment Format` in XGBoost gain-based importance. Circular transactions (sender = receiver) are the clearest synthetic marker of round-tripping laundering patterns.
 
 **3. The model partially memorises account identities.**
-PR-AUC drops 2× for accounts unseen in training (0.160 seen vs ~0.075 unseen). The large train-val gap in the learning curve (0.28–0.40 PR-AUC) confirms this. Adding more training data helps modestly but does not close the gap — the structural problem remains.
+PR-AUC drops 2× for accounts unseen in training (0.160 seen vs 0.075 unseen). The large train-val gap in the learning curve confirms this (gap = 0.39 at 5% training data). Adding more training data helps modestly but does not close the gap — the structural problem remains.
 
-**4. Precision-anchored risk tiers make operational sense.**
-Risk thresholds are calibrated so each tier guarantees a minimum precision level:
+**4. Three precision-anchored tiers are operationally viable at 0.1% imbalance.**
+Risk thresholds are calibrated on the validation set; the lower three tiers collapse to score ≈ 0 because the calibrated model cannot distinguish those precision levels at this extreme imbalance ratio.
 
-| Tier | Min. precision | Interpretation |
-|------|---------------|----------------|
-| Critical | ≥ 15% | ~1 in 7 alerts is genuine fraud — immediate investigation |
-| High | ≥ 5% | ~1 in 20 — priority review queue |
-| Medium-High | ≥ 2% | ~1 in 50 — standard investigation queue |
-| Medium | ≥ 0.5% | ~6× baseline — secondary screening |
-| Low | ≥ 0.2% | ~2× baseline — automated flag |
-| Very Low | ≥ 0.1% | Just above random — watchlist only |
+| Tier | Threshold | Alerts | Fraud caught | Cum. recall | Actual precision |
+|------|-----------|--------|-------------|-------------|-----------------|
+| **Critical** (≥15%) | 0.0502 | 12,508 | 1,898 | 27.4% | 15.2% ✓ |
+| **High** (≥5%) | 0.0099 | +83,726 | +2,414 | 62.2% | 2.9% |
+| **Medium-High** (≥2%) | 0.0025 | +247,571 | +1,033 | 77.1% | 0.4% |
+
+> The "High" tier achieves its volume target but not its 5% precision floor on test data — precision is 2.9%. The gap reflects calibration transferability across time. The GNN comparison will test whether graph-aware scores produce better-separated tiers.
 
 ---
 
@@ -103,7 +104,7 @@ Risk thresholds are calibrated so each tier guarantees a minimum precision level
 
 ```bash
 # 1. Install dependencies
-pip install xgboost scikit-learn pandas numpy matplotlib seaborn shap optuna
+pip install -r requirements.txt
 
 # 2. Place the raw CSV at data/raw/HI-Medium_Trans.csv
 #    OR set an environment variable pointing to your data/raw directory:
@@ -194,6 +195,6 @@ The GNN should improve recall on unseen accounts (the main weakness of Model A) 
 
 ## Data
 
-The IBM AML dataset is publicly available. Download it and place it at `data/raw/HI-Medium_Trans.csv`.
+The IBM AML dataset is publicly available on the [IBM AML Transactions page](https://www.kaggle.com/datasets/ealtman2019/ibm-transactions-for-anti-money-laundering-aml). Download `HI-Medium_Trans.csv` and place it at `data/raw/HI-Medium_Trans.csv`.
 
 > Altman, E., et al. (2023). *Realistic Synthetic Financial Transactions for Anti-Money Laundering Models.* NeurIPS 2023. arXiv:2306.16424.
