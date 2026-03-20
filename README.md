@@ -72,16 +72,18 @@ Contrary to expectation, `self_loop` and `same_bank` rank above `Payment Format`
 **3. The model partially memorises account identities.**
 PR-AUC drops 2× for accounts unseen in training (0.160 seen vs 0.075 unseen). The large train-val gap in the learning curve confirms this (gap = 0.39 at 5% training data). Adding more training data helps modestly but does not close the gap — the structural problem remains.
 
-**4. Three precision-anchored tiers are operationally viable at 0.1% imbalance.**
-Risk thresholds are calibrated on the validation set; the lower three tiers collapse to score ≈ 0 because the calibrated model cannot distinguish those precision levels at this extreme imbalance ratio.
+**4. Volume-based alert tiers match how real AML desks operate.**
+Rather than promising a precision floor (which breaks under calibration transfer across time), tiers are defined by review capacity: "the top-K transactions ranked by model score." Actual precision is read directly from the test set — no calibration assumptions.
 
-| Tier | Threshold | Alerts | Fraud caught | Cum. recall | Actual precision |
-|------|-----------|--------|-------------|-------------|-----------------|
-| **Critical** (≥15%) | 0.0502 | 12,508 | 1,898 | 27.4% | 15.2% ✓ |
-| **High** (≥5%) | 0.0099 | +83,726 | +2,414 | 62.2% | 2.9% |
-| **Medium-High** (≥2%) | 0.0025 | +247,571 | +1,033 | 77.1% | 0.4% |
+| Tier | Review capacity | Score thr. | Fraud caught | Precision | FP per TP |
+|------|----------------|-----------|-------------|-----------|-----------|
+| **Critical** | Top 50 (~17/day) | 0.998 | 46 cum. (0.7% recall) | **92%** | 0.1 |
+| **High** | Top 500 (~167/day) | 0.970 | 309 cum. (4.5% recall) | **58%** | 0.7 |
+| **Medium** | Top 5,000 (~1,700/day) | 0.779 | 1,272 cum. (18.4% recall) | **21%** | 3.7 |
+| **Low** | Top 20,000 (~6,700/day) | 0.532 | 2,339 cum. (33.7% recall) | **7%** | 13.1 |
+| **Extended** | Top 50,000 (~16,700/day) | 0.269 | 3,486 cum. (50.3% recall) | **4%** | 25.2 |
 
-> The "High" tier achieves its volume target but not its 5% precision floor on test data — precision is 2.9%. The gap reflects calibration transferability across time. The GNN comparison will test whether graph-aware scores produce better-separated tiers.
+At the "Extended" tier (50,000 alerts over 3 days), 50% of all laundering cases are captured at 4% precision — 40× above the 0.1% random baseline. The GNN comparison will test whether multi-hop signals can improve the high-confidence tiers (Critical/High), where analyst time is most constrained.
 
 ---
 
@@ -138,7 +140,7 @@ jupyter notebook aml_model_a.ipynb
 | 9 | Full evaluation: metrics, calibration, 6-panel plot, workload curve, memorization diagnostic, learning curve |
 | 10 | Payment Format ablation (~-40% PR-AUC) |
 | 11 | SHAP explanations (global importance, beeswarm, waterfall, laundering vs legitimate) |
-| 12 | Precision-anchored risk tiers (Critical / High / Medium-High / Medium / Low / Very Low) |
+| 12 | Volume-based risk tiers (Critical / High / Medium / Low / Extended) — precision read from test ranking |
 | 13 | Artifact export (model JSON, calibrator, scored CSV, summary JSON) |
 | 14 | GNN motivation: graph structure, multi-hop laundering patterns, evidence from memorization |
 | 15 | Summary and key findings |
